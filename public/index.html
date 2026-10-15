@@ -148,6 +148,8 @@
   #modal .td .tt { flex: 1; min-width: 0; overflow-wrap: anywhere; } #modal .td .tp { color: #666; font-size: 11px; }
   #modal .td.dn .tt { color: #666; text-decoration: line-through; }
   #modal .td button, #modal .tk .kp { padding: 0 6px; font-size: 11px; }
+  #modal .kb { display: grid; grid-template-columns: 190px 1fr; gap: 12px; padding: 7px 4px; border-bottom: 1px solid #222; font-size: 13px; align-items: center; }
+  #modal .kb kbd { font: inherit; border: 1px solid #555; padding: 1px 7px; border-radius: 2px; color: #fff; white-space: nowrap; }
   #modal .tk ul { margin: 4px 0 0; padding-left: 16px; color: #ccc; } #modal .tk li.ip { color: #facc15; }
   #modal .tk .q { color: #888; margin-top: 4px; white-space: pre-wrap; word-break: break-all; } #modal .tk .q i { color: #666; font-style: normal; }
   #modal .ov:hover { background: #111; } #modal .ov pre { margin: 0; padding: 0; overflow: hidden; max-height: 3em; color: #888; flex: none; font-size: 11px; }
@@ -196,6 +198,7 @@
       <label>文字サイズ<select id="fs"><option value="11">小</option><option value="12">中</option><option value="14">大</option><option value="16">特大</option></select></label>
       <label title="コンテキストが指定%を超え、待機中のとき、STATE.md/LOG.mdへの保存を自動で依頼します">自動保存<select id="asv"><option value="0">オフ</option><option value="70">ctx 70%</option><option value="80">ctx 80%</option><option value="90">ctx 90%</option></select></label>
       <label>スクロール<select id="ss"><option value="1">遅</option><option value="3">標準</option><option value="5">速</option><option value="8">特速</option></select></label>
+          <button id="kbbtn" class="ghost">ショートカット ⌃⇧/</button>
     </div>
   </span>
 </header>
@@ -754,6 +757,7 @@ async function showTasks() {
       return row;
     });
     box.replaceChildren(hel('div', 'tdh', `やること ${open.length}件`), add, ...rows);
+    add.focus();
   };
   renderTodos();
   const ago = (t) => { if (!t) return ''; const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'いま' : m < 60 ? `${m}分前` : m < 1440 ? `${Math.floor(m / 60)}時間前` : `${Math.floor(m / 1440)}日前`; };
@@ -1218,6 +1222,44 @@ window.addEventListener('keydown', (e) => {
   const id = [...tiles.keys()][Number(m[1]) - 1];
   if (id) focusTile(id);
 });
+const openOnly = (fn) => { const m = document.getElementById('modal'); if (m) m.querySelector('.cl').click(); fn(); };
+const focused = () => [...tiles.values()].find((t) => t.el.classList.contains('focus'));
+function jumpAttention() {
+  const ids = [...tiles.keys()];
+  const want = (st) => ids.filter((id) => tiles.get(id).state === st);
+  const list = want('ask').length ? want('ask') : want('done');
+  if (!list.length) { toast('いま確認待ちのパネルはありません'); return; }
+  const cur = focused();
+  const at = cur ? list.indexOf([...tiles.entries()].find(([, t]) => t === cur)[0]) : -1;
+  focusTile(list[(at + 1) % list.length]);
+}
+const SHORTCUTS = [
+  ['KeyT', 'T', 'タスク・やること (そのまま入力して追加)', () => openOnly(showTasks)],
+  ['KeyB', 'B', '一斉送信', () => openOnly(showBroadcast)],
+  ['KeyO', 'O', '一覧', () => openOnly(showOverview)],
+  ['KeyF', 'F', '履歴を検索', () => openOnly(showSearch)],
+  ['KeyU', 'U', '使用量', () => openOnly(showUsage)],
+  ['KeyN', 'N', '新しいパネルを作る (作業フォルダ入力へ)', () => $('cwd').focus()],
+  ['KeyA', 'A', '次の要注意パネルへ', jumpAttention],
+  ['KeyE', 'E', '拡大の切り替え', () => { const t = focused(); if (t) t.el.querySelector('.mx').click(); }],
+  ['ArrowLeft', '←', '前のページ', () => { if (!$('prev').disabled) $('prev').click(); }],
+  ['ArrowRight', '→', '次のページ', () => { if (!$('next').disabled) $('next').click(); }],
+  ['Slash', '/', 'ショートカット', () => openOnly(showShortcuts)],
+];
+function showShortcuts() {
+  const { body } = makeModal('ショートカット', 'Ctrl + Shift + キー (ターミナルの入力とは重なりません)');
+  for (const [, k, label] of SHORTCUTS) { const r = hel('div', 'kb'); const kb = hel('kbd', '', `Ctrl + Shift + ${k}`); r.append(kb, hel('span', '', label)); body.appendChild(r); }
+  for (const [k, label] of [['Opt + 1〜9', 'パネル N へ移動'], ['Opt + Tab', 'パネルを順に移動']]) { const r = hel('div', 'kb'); r.append(hel('kbd', '', k), hel('span', '', label)); body.appendChild(r); }
+}
+window.addEventListener('keydown', (e) => {
+  if (e.isComposing || !e.ctrlKey || !e.shiftKey || e.metaKey || e.altKey) return;
+  const sc = SHORTCUTS.find((x) => x[0] === e.code);
+  if (!sc) return;
+  e.preventDefault();
+  e.stopPropagation();
+  sc[3]();
+}, true);
+$('kbbtn').onclick = () => { $('settings').classList.add('hide'); showShortcuts(); };
 $('prev').onclick = () => { page--; layout(); };
 $('next').onclick = () => { page++; layout(); };
 window.addEventListener('resize', layout);
